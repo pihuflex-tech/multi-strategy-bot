@@ -170,7 +170,7 @@ def generate_all():
                 "cluster": "Afternoon_0DTE",
                 "name": f"0DTE_{action}_{t[:5].replace(':','')}",
                 "entry_time": t,
-                "exit_time": "15:20:00",
+                "exit_time": "15:15:00",
                 "rule_type": "AFTERNOON_0DTE",
                 "action": action,
                 "sl_pct": 25.0,
