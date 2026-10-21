@@ -1,0 +1,1 @@
+timestamp,strategy_id,cluster,symbol,strike,opt_type,expiry,action,qty,entry_price,exit_price,slippage,gross_pnl,brokerage,stt,exchange_charges,gst,stamp_duty,net_pnl
