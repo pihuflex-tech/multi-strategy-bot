@@ -34,7 +34,7 @@ from src.feed.feed_dispatcher import FeedDispatcher, shutdown_pipeline
 from src.feed.feed_health import FeedHealthMonitor
 from src.feed.feed_listener import FeedListener
 from src.feed.feed_queue import DropOldestSnapshotQueue
-from src.market.market_snapshot import MarketSnapshot
+from src.market.market_snapshot import FuturesQuote, MarketSnapshot
 
 
 class DummyMockServer:
@@ -625,5 +625,251 @@ class TestPhase6CompositionRootWiringAndShutdown(unittest.TestCase):
         self.assertEqual(details["queue_drained_count"], 2)
 
 
+class TestTelemetryFeedHealthIntegration(unittest.TestCase):
+    """Focused tests verifying ApplicationTelemetryProvider dynamically reflects actual FeedHealthMonitor state."""
+
+    def test_telemetry_reports_not_connected_when_feed_disabled(self):
+        """When feed_enabled=False, telemetry strictly reports NOT_CONNECTED regardless of health monitor."""
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0)
+        snap = MarketSnapshot(timestamp="2026-10-27 12:00:00", spot_price=24850.0)
+        monitor.record_snapshot(snap)
+
+        provider = main.ApplicationTelemetryProvider(
+            health_monitor=monitor,
+            feed_enabled=False
+        )
+        state = provider.get_state()
+        self.assertEqual(state["feed_connection"], "NOT_CONNECTED")
+        self.assertEqual(state["market_data_status"], "NOT_AVAILABLE")
+
+    def test_telemetry_reports_connecting_when_listener_running_awaiting_tick(self):
+        """When feed_enabled=True and listener is running but uninitialized, reports CONNECTING."""
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0)
+        mock_listener = MagicMock()
+        mock_listener.is_running = True
+        mock_listener.last_snapshot = None
+
+        provider = main.ApplicationTelemetryProvider(
+            health_monitor=monitor,
+            listener=mock_listener,
+            feed_enabled=True
+        )
+        state = provider.get_state()
+        self.assertEqual(state["feed_connection"], "CONNECTING")
+        self.assertEqual(state["market_data_status"], "NOT_INITIALIZED")
+        self.assertIsNone(state["last_tick"]["spot"])
+
+    def test_telemetry_reports_connected_and_extracts_live_tick(self):
+        """When feed_enabled=True and valid tick received, reports CONNECTED and populates last_tick."""
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0)
+        fut = FuturesQuote(token="48704", symbol="NIFTY_FUT", expiry="2026-10-29", ltp=24890.0)
+        snap = MarketSnapshot(timestamp="2026-10-27 12:00:00", spot_price=24850.5, futures=fut)
+        monitor.record_snapshot(snap)
+
+        mock_listener = MagicMock()
+        mock_listener.is_running = True
+        mock_listener.last_snapshot = snap
+
+        provider = main.ApplicationTelemetryProvider(
+            health_monitor=monitor,
+            listener=mock_listener,
+            feed_enabled=True
+        )
+        state = provider.get_state()
+        self.assertEqual(state["feed_connection"], "CONNECTED")
+        self.assertEqual(state["market_data_status"], "HEALTHY")
+        self.assertEqual(state["last_tick"]["spot"], 24850.5)
+        self.assertEqual(state["last_tick"]["futures"], 24890.0)
+        self.assertEqual(state["last_tick"]["timestamp"], "2026-10-27 12:00:00")
+        self.assertEqual(state["last_tick"]["symbol"], "NIFTY")
+
+    def test_telemetry_reports_stale_when_elapsed_exceeds_threshold(self):
+        """When feed data goes stale, reports STALE without fabricating live connection."""
+        curr_time = 1000.0
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0, time_provider=lambda: curr_time)
+        snap = MarketSnapshot(timestamp="2026-10-27 12:00:00", spot_price=24850.0)
+        monitor.record_snapshot(snap)
+        self.assertTrue(monitor.is_healthy)
+
+        # Advance time by 6 seconds to trigger stale
+        curr_time = 1006.0
+        self.assertTrue(monitor.is_stale)
+
+        provider = main.ApplicationTelemetryProvider(
+            health_monitor=monitor,
+            feed_enabled=True
+        )
+        state = provider.get_state()
+        self.assertEqual(state["feed_connection"], "STALE")
+        self.assertEqual(state["market_data_status"], "STALE")
+
+    def test_telemetry_reports_disconnected_on_transport_failure(self):
+        """When health monitor records disconnect, reports DISCONNECTED."""
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0)
+        monitor.record_disconnect("ZeroMQ transport dropped")
+
+        provider = main.ApplicationTelemetryProvider(
+            health_monitor=monitor,
+            feed_enabled=True
+        )
+        state = provider.get_state()
+        self.assertEqual(state["feed_connection"], "DISCONNECTED")
+        self.assertEqual(state["market_data_status"], "DISCONNECTED")
+        self.assertEqual(state["errors"]["last_feed_error"], "ZeroMQ transport dropped")
+
+    def test_telemetry_reports_invalid_data_on_corrupt_payload(self):
+        """When health monitor records invalid data, reports INVALID_DATA."""
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0)
+        monitor.record_invalid_tick("PARSER_ERROR: Malformed JSON")
+
+        provider = main.ApplicationTelemetryProvider(
+            health_monitor=monitor,
+            feed_enabled=True
+        )
+        state = provider.get_state()
+        self.assertEqual(state["feed_connection"], "INVALID_DATA")
+        self.assertEqual(state["market_data_status"], "INVALID_DATA")
+        self.assertIn("PARSER_ERROR", state["errors"]["last_feed_error"])
+
+
+class TestCliStatusFeedHealthIntegration(unittest.TestCase):
+    """Deterministic offline tests verifying main.py --status CLI output across feed states."""
+
+    def test_cli_status_reports_not_connected_when_feed_disabled(self):
+        """Default status report displays NOT_CONNECTED (Offline) when feed_enabled is false."""
+        stdout_capture = io.StringIO()
+        with patch("sys.argv", ["main.py", "--status"]), patch("sys.stdout", stdout_capture):
+            code = main.main()
+        self.assertEqual(code, 0)
+        output = stdout_capture.getvalue()
+        self.assertIn("Feed Connection: NOT_CONNECTED (Offline)", output)
+        self.assertIn("Total Unrealized MTM: INR 0", output)
+
+    def test_cli_status_reports_connected_live_when_feed_healthy(self):
+        """When feed is enabled and monitor is healthy, CLI reports CONNECTED (Live)."""
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0)
+        snap = MarketSnapshot(timestamp="2026-10-27 12:00:00", spot_price=24850.0)
+        monitor.record_snapshot(snap)
+
+        stdout_capture = io.StringIO()
+        with patch("sys.argv", ["main.py", "--status"]), \
+             patch("sys.stdout", stdout_capture), \
+             patch("main.initialize_subsystems") as mock_sub:
+            mock_sub.return_value = {
+                "registry": MagicMock(get_registered_ids=lambda: ["STRAT_001"], get_active_strategies=lambda: []),
+                "position_manager": MagicMock(get_portfolio_summary=lambda: {"open_positions_count": 0, "total_unrealized_mtm": 0.0}),
+                "runner": MagicMock(),
+                "health_monitor": monitor,
+                "listener": MagicMock(is_running=True),
+                "feed_cfg": {"feed_enabled": True},
+                "app_cfg": {"app_name": "NIFTY Multi-Strategy Bot", "mode": "PAPER_TRADING_ONLY"},
+            }
+            code = main.main()
+
+        self.assertEqual(code, 0)
+        output = stdout_capture.getvalue()
+        self.assertIn("Feed Connection: CONNECTED (Live)", output)
+
+    def test_cli_status_reports_stale_when_elapsed_exceeds_threshold(self):
+        """When feed is enabled and data is older than threshold, CLI reports STALE."""
+        curr_time = 1000.0
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0, time_provider=lambda: curr_time)
+        snap = MarketSnapshot(timestamp="2026-10-27 12:00:00", spot_price=24850.0)
+        monitor.record_snapshot(snap)
+        curr_time = 1006.0  # Trigger STALE
+
+        stdout_capture = io.StringIO()
+        with patch("sys.argv", ["main.py", "--status"]), \
+             patch("sys.stdout", stdout_capture), \
+             patch("main.initialize_subsystems") as mock_sub:
+            mock_sub.return_value = {
+                "registry": MagicMock(get_registered_ids=lambda: ["STRAT_001"], get_active_strategies=lambda: []),
+                "position_manager": MagicMock(get_portfolio_summary=lambda: {"open_positions_count": 0, "total_unrealized_mtm": 0.0}),
+                "runner": MagicMock(),
+                "health_monitor": monitor,
+                "listener": MagicMock(is_running=True),
+                "feed_cfg": {"feed_enabled": True},
+                "app_cfg": {"app_name": "NIFTY Multi-Strategy Bot", "mode": "PAPER_TRADING_ONLY"},
+            }
+            code = main.main()
+
+        self.assertEqual(code, 0)
+        output = stdout_capture.getvalue()
+        self.assertIn("Feed Connection: STALE (Freshness threshold exceeded)", output)
+
+    def test_cli_status_reports_disconnected_on_transport_drop(self):
+        """When feed is enabled and monitor reports disconnect, CLI reports DISCONNECTED."""
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0)
+        monitor.record_disconnect("ZeroMQ transport dropped")
+
+        stdout_capture = io.StringIO()
+        with patch("sys.argv", ["main.py", "--status"]), \
+             patch("sys.stdout", stdout_capture), \
+             patch("main.initialize_subsystems") as mock_sub:
+            mock_sub.return_value = {
+                "registry": MagicMock(get_registered_ids=lambda: ["STRAT_001"], get_active_strategies=lambda: []),
+                "position_manager": MagicMock(get_portfolio_summary=lambda: {"open_positions_count": 0, "total_unrealized_mtm": 0.0}),
+                "runner": MagicMock(),
+                "health_monitor": monitor,
+                "listener": MagicMock(is_running=True),
+                "feed_cfg": {"feed_enabled": True},
+                "app_cfg": {"app_name": "NIFTY Multi-Strategy Bot", "mode": "PAPER_TRADING_ONLY"},
+            }
+            code = main.main()
+
+        self.assertEqual(code, 0)
+        output = stdout_capture.getvalue()
+        self.assertIn("Feed Connection: DISCONNECTED (ZeroMQ transport dropped)", output)
+
+    def test_cli_status_reports_invalid_data_on_corrupt_payload(self):
+        """When feed is enabled and monitor reports invalid data, CLI reports INVALID_DATA."""
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0)
+        monitor.record_invalid_tick("PARSER_ERROR: Bad Frame")
+
+        stdout_capture = io.StringIO()
+        with patch("sys.argv", ["main.py", "--status"]), \
+             patch("sys.stdout", stdout_capture), \
+             patch("main.initialize_subsystems") as mock_sub:
+            mock_sub.return_value = {
+                "registry": MagicMock(get_registered_ids=lambda: ["STRAT_001"], get_active_strategies=lambda: []),
+                "position_manager": MagicMock(get_portfolio_summary=lambda: {"open_positions_count": 0, "total_unrealized_mtm": 0.0}),
+                "runner": MagicMock(),
+                "health_monitor": monitor,
+                "listener": MagicMock(is_running=True),
+                "feed_cfg": {"feed_enabled": True},
+                "app_cfg": {"app_name": "NIFTY Multi-Strategy Bot", "mode": "PAPER_TRADING_ONLY"},
+            }
+            code = main.main()
+
+        self.assertEqual(code, 0)
+        output = stdout_capture.getvalue()
+        self.assertIn("Feed Connection: INVALID_DATA (PARSER_ERROR: Bad Frame)", output)
+
+    def test_cli_status_reports_connecting_when_listener_active_awaiting_tick(self):
+        """When feed is enabled and listener is running awaiting tick, CLI reports CONNECTING."""
+        monitor = FeedHealthMonitor(stale_threshold_seconds=5.0)
+
+        stdout_capture = io.StringIO()
+        with patch("sys.argv", ["main.py", "--status"]), \
+             patch("sys.stdout", stdout_capture), \
+             patch("main.initialize_subsystems") as mock_sub:
+            mock_sub.return_value = {
+                "registry": MagicMock(get_registered_ids=lambda: ["STRAT_001"], get_active_strategies=lambda: []),
+                "position_manager": MagicMock(get_portfolio_summary=lambda: {"open_positions_count": 0, "total_unrealized_mtm": 0.0}),
+                "runner": MagicMock(),
+                "health_monitor": monitor,
+                "listener": MagicMock(is_running=True),
+                "feed_cfg": {"feed_enabled": True},
+                "app_cfg": {"app_name": "NIFTY Multi-Strategy Bot", "mode": "PAPER_TRADING_ONLY"},
+            }
+            code = main.main()
+
+        self.assertEqual(code, 0)
+        output = stdout_capture.getvalue()
+        self.assertIn("Feed Connection: CONNECTING (Awaiting initial market tick)", output)
+
+
 if __name__ == "__main__":
     unittest.main()
+
+

@@ -31,7 +31,7 @@ The system is designed to consume tick data from a decoupled ZeroMQ market feed 
 | **Web Monitoring Dashboard** | **Operational** | Read-only Flask dashboard on `http://127.0.0.1:8080`. Fully decoupled telemetry provider. |
 | **Market Feed Subscriber** | **Standby / Offline** | Client abstraction, parsers, and health monitors implemented. Live ZeroMQ transport connection is disabled by default (`feed_enabled: false`). |
 | **Broker Order Placement** | **Excluded by Design** | Strict simulation only. No exchange or broker API connections exist or are authorized. |
-| **Automated Test Suite** | **Verified (278/278 Passing)** | 100% deterministic offline regression tests. No network sockets or external dependencies. |
+| **Automated Test Suite** | **Verified (371/371 Passing)** | 100% deterministic offline regression tests. No network sockets or external dependencies. |
 
 ---
 
@@ -217,7 +217,7 @@ python main.py --test-tick
 
 ## 8. Running the Offline Test Suite
 
-The project includes an extensive suite of **278 deterministic offline regression tests**. Tests require zero network connections, open no listening sockets, and mock all persistence paths to isolated temporary directories.
+The project includes an extensive suite of **371 deterministic offline regression tests**. Tests require zero network connections, open no listening sockets, and mock all persistence paths to isolated temporary directories.
 
 To execute the entire test suite:
 

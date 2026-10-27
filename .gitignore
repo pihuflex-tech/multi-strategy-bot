@@ -54,6 +54,7 @@ Desktop.ini
 # Runtime states & logs (keep gitkeeps)
 runtime/*.json
 runtime/*.tmp
-logs/application/*.log
-logs/errors/*.log
+logs/**/*.log
+logs/live_state.json
 logs/live_state.json.tmp
+logs/strategies/**/*.csv

@@ -34,7 +34,7 @@ from src.execution.paper_broker import PaperBroker
 from src.execution.position_manager import MultiLegPositionManager
 from src.market.market_snapshot import FuturesQuote, MarketSnapshot, OptionQuote
 from src.feed.feed_dispatcher import FeedDispatcher, shutdown_pipeline
-from src.feed.feed_health import FeedHealthMonitor
+from src.feed.feed_health import FeedHealthMonitor, FeedHealthStatus
 from src.feed.feed_listener import FeedListener
 from src.feed.feed_queue import DropOldestSnapshotQueue
 from src.portfolio.risk_manager import RiskManager
@@ -63,12 +63,18 @@ class ApplicationTelemetryProvider:
         lock: Optional[threading.Lock] = None,
         app_lifecycle: str = "RUNNING",
         paper_execution: str = "STANDBY",
+        health_monitor: Optional[FeedHealthMonitor] = None,
+        listener: Optional[FeedListener] = None,
+        feed_enabled: bool = False,
     ):
         self.registry = registry
         self.position_manager = position_manager
         self._lock = lock or threading.Lock()
         self.app_lifecycle = app_lifecycle
         self.paper_execution = paper_execution
+        self.health_monitor = health_monitor
+        self.listener = listener
+        self.feed_enabled = feed_enabled
 
     def get_state(self) -> Dict[str, Any]:
         """Produce a synchronized, sanitized dictionary snapshot for the dashboard API."""
@@ -173,24 +179,84 @@ class ApplicationTelemetryProvider:
             else:
                 system_error = "NONE"
 
+            # 4. Feed connection, market health, and last tick extraction (never fabricated)
+            feed_connection = "NOT_CONNECTED"
+            market_data_status = "NOT_AVAILABLE"
+            last_feed_error = "NONE"
+            last_tick_data: Dict[str, Any] = {
+                "timestamp": "NOT_AVAILABLE",
+                "spot": None,
+                "futures": None,
+                "symbol": "NIFTY",
+            }
+
+            if not self.feed_enabled:
+                feed_connection = "NOT_CONNECTED"
+                market_data_status = "NOT_AVAILABLE"
+            elif self.health_monitor is not None:
+                # Query actual health monitor status
+                status = self.health_monitor.check_health()
+                if self.health_monitor.status == FeedHealthStatus.INVALID_DATA and self.health_monitor.last_valid_receipt_monotonic is None:
+                    status = FeedHealthStatus.INVALID_DATA
+
+                if self.health_monitor.last_error:
+                    last_feed_error = str(self.health_monitor.last_error)
+
+                if status == FeedHealthStatus.HEALTHY and self.health_monitor.is_healthy:
+                    feed_connection = "CONNECTED"
+                    market_data_status = "HEALTHY"
+                elif status == FeedHealthStatus.DISCONNECTED:
+                    feed_connection = "DISCONNECTED"
+                    market_data_status = "DISCONNECTED"
+                elif status == FeedHealthStatus.INVALID_DATA:
+                    feed_connection = "INVALID_DATA"
+                    market_data_status = "INVALID_DATA"
+                elif status == FeedHealthStatus.STALE or self.health_monitor.is_stale:
+                    if self.health_monitor.last_valid_receipt_monotonic is not None:
+                        feed_connection = "STALE"
+                        market_data_status = "STALE"
+                    else:
+                        feed_connection = "CONNECTING"
+                        market_data_status = "NOT_INITIALIZED"
+                elif status == FeedHealthStatus.NOT_INITIALIZED:
+                    if self.listener is not None and getattr(self.listener, "is_running", False):
+                        feed_connection = "CONNECTING"
+                        market_data_status = "NOT_INITIALIZED"
+                    else:
+                        feed_connection = "NOT_CONNECTED"
+                        market_data_status = "NOT_AVAILABLE"
+
+            # Last market tick from listener or health monitor
+            snapshot: Optional[MarketSnapshot] = None
+            if self.listener is not None and getattr(self.listener, "last_snapshot", None) is not None:
+                snapshot = self.listener.last_snapshot
+
+            if snapshot is not None:
+                fut_ltp = None
+                if snapshot.futures is not None and hasattr(snapshot.futures, "ltp"):
+                    fut_ltp = _safe_float(snapshot.futures.ltp)
+                last_tick_data = {
+                    "timestamp": str(snapshot.timestamp) if snapshot.timestamp else "NOT_AVAILABLE",
+                    "spot": _safe_float(snapshot.spot_price),
+                    "futures": fut_ltp,
+                    "symbol": "NIFTY",
+                }
+            elif self.health_monitor is not None and self.health_monitor.last_valid_exchange_timestamp:
+                last_tick_data["timestamp"] = str(self.health_monitor.last_valid_exchange_timestamp)
+
             return {
                 "app_lifecycle": self.app_lifecycle,
                 "bot_status": "STANDBY",
-                "feed_connection": "NOT_CONNECTED",
-                "market_data_status": "NOT_AVAILABLE",
+                "feed_connection": feed_connection,
+                "market_data_status": market_data_status,
                 "strategy_engine": strategy_engine_status,
                 "paper_execution": self.paper_execution,
-                "last_tick": {
-                    "timestamp": "NOT_AVAILABLE",
-                    "spot": None,
-                    "futures": None,
-                    "symbol": "NIFTY",
-                },
+                "last_tick": last_tick_data,
                 "strategies": strategies_data,
                 "open_positions": open_positions_data,
                 "portfolio": portfolio_data,
                 "errors": {
-                    "last_feed_error": "NONE",
+                    "last_feed_error": last_feed_error,
                     "last_system_error": system_error,
                 },
             }
@@ -431,7 +497,58 @@ def main(
         print(f"  Active Strategies: {len(active)} (All others DISABLED)")
         print(f"  Open Positions: {summary['open_positions_count']}")
         print(f"  Total Unrealized MTM: INR {summary['total_unrealized_mtm']}")
-        print(f"  Feed Connection: NOT_CONNECTED (Offline)")
+        # Determine actual feed connection status from health monitor and configuration
+        health_mon = subsystems.get("health_monitor")
+        if feed_enabled and listener is not None and health_mon is not None:
+            # If in one-shot CLI status mode (listener not running in background), probe feed for up to 500ms
+            if health_mon.status == FeedHealthStatus.NOT_INITIALIZED and not getattr(listener, "is_running", False):
+                transport = getattr(listener, "transport", None)
+                if transport is not None and type(transport).__name__ == "ZeroMQFeedTransport":
+                    try:
+                        frames = transport.recv_frames(timeout_ms=500)
+                        if frames:
+                            listener.process_message(frames)
+                    except Exception as exc:
+                        health_mon.record_disconnect(str(exc))
+                    finally:
+                        try:
+                            transport.close()
+                        except Exception:
+                            pass
+
+        if not feed_enabled:
+            feed_display = "NOT_CONNECTED (Offline)"
+        elif health_mon is not None:
+            mon_status = health_mon.check_health()
+            if health_mon.status == FeedHealthStatus.INVALID_DATA and health_mon.last_valid_receipt_monotonic is None:
+                mon_status = FeedHealthStatus.INVALID_DATA
+            if mon_status == FeedHealthStatus.HEALTHY:
+                feed_display = "CONNECTED (Live)"
+            elif mon_status == FeedHealthStatus.DISCONNECTED:
+                feed_display = f"DISCONNECTED ({health_mon.last_error or 'Transport unavailable'})"
+            elif mon_status == FeedHealthStatus.INVALID_DATA:
+                feed_display = f"INVALID_DATA ({health_mon.last_error or 'Corrupted payload'})"
+            elif mon_status == FeedHealthStatus.STALE:
+                feed_display = "STALE (Freshness threshold exceeded)"
+            elif mon_status == FeedHealthStatus.NOT_INITIALIZED:
+                if listener is not None and getattr(listener, "is_running", False):
+                    feed_display = "CONNECTING (Awaiting initial market tick)"
+                else:
+                    feed_display = "NOT_CONNECTED (Offline)"
+            else:
+                feed_display = "NOT_CONNECTED (Offline)"
+        elif listener is not None and getattr(listener, "is_running", False):
+            feed_display = "CONNECTING (Awaiting initial market tick)"
+        else:
+            feed_display = "NOT_CONNECTED (Offline)"
+
+        print(f"  Feed Connection: {feed_display}")
+        if listener is not None and getattr(listener, "last_snapshot", None) is not None:
+            snap = listener.last_snapshot
+            spot_val = f"{snap.spot_price:.2f}" if isinstance(getattr(snap, "spot_price", None), (int, float)) else str(getattr(snap, "spot_price", "N/A"))
+            fut_ltp = getattr(snap.futures, "ltp", None) if snap.futures else None
+            fut_str = f" | Futures: {fut_ltp:.2f}" if isinstance(fut_ltp, (int, float)) else (f" | Futures: {fut_ltp}" if fut_ltp is not None else "")
+            print(f"  Market Feed: Spot: {spot_val}{fut_str} | Timestamp: {getattr(snap, 'timestamp', 'N/A')}")
         print("===============================\n")
         return 0
 
@@ -444,6 +561,9 @@ def main(
             registry=registry,
             position_manager=position_manager,
             lock=state_lock,
+            health_monitor=subsystems.get("health_monitor"),
+            listener=listener,
+            feed_enabled=feed_enabled,
         )
 
         if not args.no_dashboard:
