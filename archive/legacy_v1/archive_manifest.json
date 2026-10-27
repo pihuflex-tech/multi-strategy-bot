@@ -1,0 +1,22 @@
+{
+  "strategy_engine.py": {
+    "size_bytes": 17533,
+    "sha256": "00417c3681e7226f1e5bbaf519a378067fd36f0b62fb3908c21741996d7d4580",
+    "archived_path": "C:\\Users\\ASUS\\Desktop\\multi-strategy-bot\\archive\\legacy_v1\\strategy_engine.py"
+  },
+  "generate_strategies.py": {
+    "size_bytes": 7068,
+    "sha256": "f7da8f5354996bca14ed7047b1c0ff2adbad377749161d07f7f3f3405c1bf586",
+    "archived_path": "C:\\Users\\ASUS\\Desktop\\multi-strategy-bot\\archive\\legacy_v1\\generate_strategies.py"
+  },
+  "strategies_config.json": {
+    "size_bytes": 31352,
+    "sha256": "53ef9f77ec68d2b3ebb051c054eecccc264ac2ff9753f0a3f23239095a6b4738",
+    "archived_path": "C:\\Users\\ASUS\\Desktop\\multi-strategy-bot\\archive\\legacy_v1\\strategies_config.json"
+  },
+  "dashboard.py": {
+    "size_bytes": 7939,
+    "sha256": "1c5f4fa3664d30050cbe530ffad4495f7462079e41f488220c367cdf119d6a8d",
+    "archived_path": "C:\\Users\\ASUS\\Desktop\\multi-strategy-bot\\archive\\legacy_v1\\dashboard.py"
+  }
+}

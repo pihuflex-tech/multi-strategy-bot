@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIFTY Multi-Strategy Quant Monitor</title>
+    <style>
+        :root {
+            --bg-base: #0d1117;
+            --bg-surface: #161b22;
+            --bg-elevated: #21262d;
+            --border-subtle: #30363d;
+            --border-muted: #21262d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            
+            --color-green: #3fb950;
+            --color-green-bg: rgba(46, 160, 67, 0.15);
+            --color-green-border: rgba(46, 160, 67, 0.4);
+            
+            --color-red: #f85149;
+            --color-red-bg: rgba(218, 54, 51, 0.15);
+            --color-red-border: rgba(218, 54, 51, 0.4);
+            
+            --color-amber: #d29922;
+            --color-amber-bg: rgba(187, 128, 9, 0.15);
+            --color-amber-border: rgba(187, 128, 9, 0.4);
+            
+            --color-blue: #58a6ff;
+            --color-blue-bg: rgba(56, 139, 253, 0.15);
+            --color-blue-border: rgba(56, 139, 253, 0.4);
+            
+            --color-gray: #8b949e;
+            --color-gray-bg: rgba(110, 118, 129, 0.15);
+            --color-gray-border: rgba(110, 118, 129, 0.4);
+            
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            font-size: 14px;
+            line-height: 1.5;
+            padding-bottom: 40px;
+        }
+
+        /* Header / Navbar */
+        .navbar {
+            background-color: #010409;
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-icon {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #238636, #1f6feb);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .brand-title {
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+            color: var(--text-primary);
+        }
+
+        .brand-subtitle {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+        }
+
+        .navbar-status {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .sync-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+        }
+
+        /* Container Layout */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Alert Banners */
+        .alert-banner {
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            line-height: 1.4;
+        }
+
+        .alert-banner.warning {
+            background-color: var(--color-amber-bg);
+            border: 1px solid var(--color-amber-border);
+            color: #e3b341;
+        }
+
+        .alert-banner.error {
+            background-color: var(--color-red-bg);
+            border: 1px solid var(--color-red-border);
+            color: var(--color-red);
+            display: none;
+        }
+
+        .alert-banner.info {
+            background-color: var(--color-blue-bg);
+            border: 1px solid var(--color-blue-border);
+            color: var(--color-blue);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .badge.success {
+            background-color: var(--color-green-bg);
+            border: 1px solid var(--color-green-border);
+            color: var(--color-green);
+        }
+        .badge.success .badge-dot { background-color: var(--color-green); }
+
+        .badge.danger {
+            background-color: var(--color-red-bg);
+            border: 1px solid var(--color-red-border);
+            color: var(--color-red);
+        }
+        .badge.danger .badge-dot { background-color: var(--color-red); }
+
+        .badge.warning {
+            background-color: var(--color-amber-bg);
+            border: 1px solid var(--color-amber-border);
+            color: var(--color-amber);
+        }
+        .badge.warning .badge-dot { background-color: var(--color-amber); }
+
+        .badge.info {
+            background-color: var(--color-blue-bg);
+            border: 1px solid var(--color-blue-border);
+            color: var(--color-blue);
+        }
+        .badge.info .badge-dot { background-color: var(--color-blue); }
+
+        .badge.neutral {
+            background-color: var(--color-gray-bg);
+            border: 1px solid var(--color-gray-border);
+            color: var(--color-gray);
+        }
+        .badge.neutral .badge-dot { background-color: var(--color-gray); }
+
+        /* Grid Cards */
+        .grid-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .card-header-sm {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            word-break: break-all;
+        }
+
+        .card-subtext {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        /* Section Containers */
+        .section-panel {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            background-color: rgba(22, 27, 34, 0.6);
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-count {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: var(--bg-elevated);
+            padding: 2px 8px;
+            border-radius: 10px;
+            border: 1px solid var(--border-muted);
+            font-family: var(--font-mono);
+        }
+
+        /* Tables */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 12px;
+        }
+
+        thead {
+            background-color: var(--bg-elevated);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        th {
+            padding: 10px 16px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 10px;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-muted);
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .mono {
+            font-family: var(--font-mono);
+        }
+
+        .text-green { color: var(--color-green); }
+        .text-red { color: var(--color-red); }
+        .text-muted { color: var(--text-muted); }
+
+        /* Empty & Loading States */
+        .empty-state {
+            padding: 32px 16px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-family: var(--font-mono);
+            letter-spacing: 0.3px;
+        }
+
+        /* Diagnostics & Error Log */
+        .diagnostics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            padding: 16px;
+        }
+
+        .diagnostic-item {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-muted);
+            border-radius: 6px;
+            padding: 12px 14px;
+        }
+
+        .diagnostic-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .diagnostic-code {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            .navbar {
+                padding: 10px 14px;
+            }
+            .container {
+                padding: 12px 10px;
+                gap: 14px;
+            }
+            .grid-cards {
+                grid-template-columns: 1fr;
+            }
+            .card-value {
+                font-size: 18px;
+            }
+            th, td {
+                padding: 8px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Navigation Header -->
+    <header class="navbar">
+        <div class="navbar-brand">
+            <div class="brand-icon">Q</div>
+            <div>
+                <div class="brand-title">NIFTY Multi-Strategy Quant Monitor</div>
+                <div class="brand-subtitle">Paper-Trading Simulation Engine &bull; Port 8080</div>
+            </div>
+        </div>
+        <div class="navbar-status">
+            <span class="sync-meta">Last Dashboard Sync: <span id="lastSyncTime" class="mono">CONNECTING...</span></span>
+            <span id="apiStatusBadge" class="badge neutral"><span class="badge-dot"></span><span id="apiStatusText">INITIALIZING</span></span>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- Error & Offline Notification Banner -->
+        <div id="offlineBanner" class="alert-banner error">
+            <strong>DASHBOARD DATA UNAVAILABLE</strong> &mdash; Unable to retrieve state from /api/state. Retrying automatically...
+        </div>
+
+        <!-- Strict Architectural Boundary Notice -->
+        <div class="alert-banner warning">
+            <div>
+                <strong>Architectural Safety Boundary:</strong> Dashboard web service health confirms only local HTTP telemetry serving. It does NOT prove broker connection, real-time tick flow, or exchange execution. All operations remain strictly offline/simulated.
+            </div>
+        </div>
+
+        <!-- SECTION A: System Overview Cards -->
+        <section aria-labelledby="sec-overview">
+            <div class="grid-cards">
+                <!-- Bot Process Status -->
+                <div class="card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Bot Status (Lifecycle)</span>
+                        <span id="botStatusBadge" class="badge neutral"><span class="badge-dot"></span><span id="botStatusText">UNKNOWN</span></span>
+                    </div>
+                    <div class="card-value" id="botStatusValue">UNKNOWN</div>
+                    <div class="card-subtext">Process runtime state (Standby / Paper Execution)</div>
+                </div>
+
+                <!-- Strategy Engine -->
+                <div class="card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Strategy Engine</span>
+                        <span id="stratEngineBadge" class="badge neutral"><span class="badge-dot"></span><span id="stratEngineText">NOT_AVAILABLE</span></span>
+                    </div>
+                    <div class="card-value" id="stratEngineValue">NOT_AVAILABLE</div>
+                    <div class="card-subtext">25 Strategy registry state</div>
+                </div>
+
+                <!-- Paper Execution -->
+                <div class="card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Paper Execution</span>
+                        <span id="paperExecBadge" class="badge neutral"><span class="badge-dot"></span><span id="paperExecText">STANDBY</span></span>
+                    </div>
+                    <div class="card-value" id="paperExecValue">STANDBY</div>
+                    <div class="card-subtext">Simulation execution session</div>
+                </div>
+
+                <!-- Feed Connection -->
+                <div class="card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Feed Connection</span>
+                        <span id="feedConnBadge" class="badge danger"><span class="badge-dot"></span><span id="feedConnText">NOT_CONNECTED</span></span>
+                    </div>
+                    <div class="card-value" id="feedConnValue">NOT_CONNECTED</div>
+                    <div class="card-subtext">ZeroMQ subscriber state</div>
+                </div>
+
+                <!-- Market Data Health -->
+                <div class="card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Market Health</span>
+                        <span id="marketHealthBadge" class="badge danger"><span class="badge-dot"></span><span id="marketHealthText">NOT_AVAILABLE</span></span>
+                    </div>
+                    <div class="card-value" id="marketHealthValue">NOT_AVAILABLE</div>
+                    <div class="card-subtext">Snapshot freshness & validity</div>
+                </div>
+
+                <!-- Last Valid Market Tick -->
+                <div class="card">
+                    <div class="card-header-sm">
+                        <span class="card-label">Last Market Tick</span>
+                        <span class="badge info mono" id="tickSymbolBadge">NIFTY</span>
+                    </div>
+                    <div class="card-value" id="tickSpotLtp">NOT AVAILABLE</div>
+                    <div class="card-subtext">
+                        Fut LTP: <span id="tickFutLtp">NOT AVAILABLE</span> &bull; <span id="tickTimestamp">NOT AVAILABLE</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION D: Portfolio Summary Grid -->
+        <section aria-labelledby="sec-portfolio" class="section-panel">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>Portfolio Accounting Summary</span>
+                    <span class="section-count" id="currencyBadge">INR (₹)</span>
+                </div>
+            </div>
+            <div class="grid-cards" style="padding: 16px;">
+                <div class="card" style="background: var(--bg-elevated);">
+                    <span class="card-label">Open Positions / Legs</span>
+                    <div class="card-value"><span id="openPositionsCount">0</span> / <span id="openLegsCount">0</span></div>
+                    <div class="card-subtext">Active paper commitments</div>
+                </div>
+                <div class="card" style="background: var(--bg-elevated);">
+                    <span class="card-label">Unrealized MTM</span>
+                    <div class="card-value" id="unrealizedMtm">NOT AVAILABLE</div>
+                    <div class="card-subtext">Mark-to-market floating value</div>
+                </div>
+                <div class="card" style="background: var(--bg-elevated);">
+                    <span class="card-label">Realized Gross P&L</span>
+                    <div class="card-value" id="realizedGrossPnl">NOT AVAILABLE</div>
+                    <div class="card-subtext">Closed trade gain / loss</div>
+                </div>
+                <div class="card" style="background: var(--bg-elevated);">
+                    <span class="card-label">Total Charges</span>
+                    <div class="card-value text-red" id="totalCharges">NOT AVAILABLE</div>
+                    <div class="card-subtext">Modeled statutory turnover & taxes</div>
+                </div>
+                <div class="card" style="background: var(--bg-elevated);">
+                    <span class="card-label">Net Combined P&L</span>
+                    <div class="card-value" id="netCombinedPnl">NOT AVAILABLE</div>
+                    <div class="card-subtext">Realized net + current MTM</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION C: Open Paper Positions Table -->
+        <section aria-labelledby="sec-positions" class="section-panel">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>Open Paper Trading Positions</span>
+                </div>
+                <span class="section-count" id="openPosBadgeCount">0 Open</span>
+            </div>
+            <div class="table-responsive">
+                <table id="positionsTable">
+                    <thead>
+                        <tr>
+                            <th>Strategy</th>
+                            <th>Instrument</th>
+                            <th>Side</th>
+                            <th>Qty</th>
+                            <th>Entry Price</th>
+                            <th>Current Price</th>
+                            <th>Unrealized P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="positionsTableBody">
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-state">NO OPEN PAPER POSITIONS</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- SECTION B: Strategy Inventory Monitor -->
+        <section aria-labelledby="sec-strategies" class="section-panel">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>Configured Strategy Inventory</span>
+                </div>
+                <span class="section-count" id="strategiesBadgeCount">0 Registered</span>
+            </div>
+            <div class="table-responsive">
+                <table id="strategiesTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Strategy Name</th>
+                            <th>Cluster</th>
+                            <th>Mode / State</th>
+                            <th>Entries Today</th>
+                        </tr>
+                    </thead>
+                    <tbody id="strategiesTableBody">
+                        <tr>
+                            <td colspan="5">
+                                <div class="empty-state">Strategy telemetry not available</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- SECTION E: Telemetry & Error Audit -->
+        <section aria-labelledby="sec-errors" class="section-panel">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>Telemetry Diagnostics & Error Audit</span>
+                </div>
+                <span class="section-count">Sanitized Public Codes</span>
+            </div>
+            <div class="diagnostics-grid">
+                <div class="diagnostic-item">
+                    <div class="diagnostic-label">Last Feed Error Code</div>
+                    <div class="diagnostic-code" id="diagFeedError">NONE</div>
+                </div>
+                <div class="diagnostic-item">
+                    <div class="diagnostic-label">Last System Error Code</div>
+                    <div class="diagnostic-code" id="diagSysError">NONE</div>
+                </div>
+                <div class="diagnostic-item">
+                    <div class="diagnostic-label">Polling Refresh Interval</div>
+                    <div class="diagnostic-code" id="diagInterval">1500 ms</div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            NIFTY Multi-Strategy Quant Bot &bull; Dual-Platform Parity (Windows 11 / Android Termux) &bull; Phase 3B Offline UI
+        </footer>
+
+    </div>
+
+    <!-- Safe, Offline Vanilla JavaScript Engine -->
+    <script>
+        (function() {
+            "use strict";
+
+            const POLL_INTERVAL_MS = 1500;
+            const REQUEST_TIMEOUT_MS = 3000;
+            let isPolling = false;
+            let pollingTimer = null;
+
+            // Safe DOM text setter (escapes and prevents XSS)
+            function setText(id, text, fallback) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (text === null || text === undefined || text === "") {
+                    el.textContent = fallback !== undefined ? fallback : "NOT AVAILABLE";
+                } else {
+                    el.textContent = String(text);
+                }
+            }
+
+            // Currency formatting
+            function formatCurrency(val) {
+                if (val === null || val === undefined || isNaN(val)) {
+                    return "NOT AVAILABLE";
+                }
+                const num = Number(val);
+                const prefix = num < 0 ? "-₹" : "₹";
+                return prefix + Math.abs(num).toFixed(2);
+            }
+
+            // Status badge updater
+            function updateBadge(badgeId, textId, text, type) {
+                const badge = document.getElementById(badgeId);
+                const txt = document.getElementById(textId);
+                if (!badge || !txt) return;
+
+                txt.textContent = text || "UNKNOWN";
+                badge.className = "badge " + (type || "neutral");
+            }
+
+            // Evaluate badge type
+            function getStatusType(status) {
+                if (!status) return "neutral";
+                const s = String(status).toUpperCase();
+                if (["ONLINE", "ACTIVE", "CONNECTED", "RUNNING"].includes(s)) return "success";
+                if (["STANDBY", "IDLE"].includes(s)) return "info";
+                if (["NOT_CONNECTED", "DISCONNECTED", "STOPPED", "ERROR", "OFFLINE"].includes(s)) return "danger";
+                if (["STALE", "PAUSED", "CONNECTING", "WARNING", "INITIALIZING"].includes(s)) return "warning";
+                return "neutral";
+            }
+
+            // Safe element builder for tables
+            function createCell(text, className) {
+                const td = document.createElement("td");
+                td.textContent = text !== null && text !== undefined ? String(text) : "-";
+                if (className) td.className = className;
+                return td;
+            }
+
+            // Render Strategies Table
+            function renderStrategies(strategies) {
+                const tbody = document.getElementById("strategiesTableBody");
+                const countBadge = document.getElementById("strategiesBadgeCount");
+                if (!tbody) return;
+
+                if (!Array.isArray(strategies) || strategies.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Strategy telemetry not available</div></td></tr>';
+                    if (countBadge) countBadge.textContent = "0 Registered";
+                    return;
+                }
+
+                if (countBadge) countBadge.textContent = strategies.length + " Registered";
+                tbody.innerHTML = "";
+
+                strategies.forEach(function(s) {
+                    const tr = document.createElement("tr");
+                    tr.appendChild(createCell(s.strategy_id || "-", "mono"));
+                    tr.appendChild(createCell(s.name || "-"));
+                    tr.appendChild(createCell(s.cluster || "-", "mono text-muted"));
+
+                    // Mode badge cell
+                    const modeTd = document.createElement("td");
+                    const modeSpan = document.createElement("span");
+                    const mode = s.mode || "DISABLED";
+                    modeSpan.textContent = mode;
+                    modeSpan.className = "badge " + (mode === "ENABLED" ? "success" : "neutral");
+                    modeTd.appendChild(modeSpan);
+                    tr.appendChild(modeTd);
+
+                    tr.appendChild(createCell(s.entries_today !== undefined ? s.entries_today : 0, "mono"));
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // Render Open Positions Table (Supports multi-leg positions and flat records)
+            function renderPositions(positions) {
+                const tbody = document.getElementById("positionsTableBody");
+                const countBadge = document.getElementById("openPosBadgeCount");
+                if (!tbody) return;
+
+                if (!Array.isArray(positions) || positions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">NO OPEN PAPER POSITIONS</div></td></tr>';
+                    if (countBadge) countBadge.textContent = "0 Open";
+                    return;
+                }
+
+                tbody.innerHTML = "";
+                let totalLegs = 0;
+
+                positions.forEach(function(pos) {
+                    if (!pos || typeof pos !== "object") return;
+                    const legs = Array.isArray(pos.legs) ? pos.legs : (pos.legs && typeof pos.legs === "object" ? Object.values(pos.legs) : []);
+
+                    if (legs.length > 0) {
+                        legs.forEach(function(leg) {
+                            if (!leg || typeof leg !== "object") return;
+                            totalLegs++;
+                            const tr = document.createElement("tr");
+
+                            // Strategy / Parent position
+                            const stratLabel = pos.strategy_id || pos.position_id || "-";
+                            tr.appendChild(createCell(stratLabel, "mono"));
+
+                            // Instrument
+                            const symbol = leg.symbol || pos.symbol || "-";
+                            tr.appendChild(createCell(symbol, "mono"));
+
+                            // Side badge
+                            const sideTd = document.createElement("td");
+                            const sideSpan = document.createElement("span");
+                            const side = String(leg.side || pos.side || "BUY").toUpperCase();
+                            sideSpan.textContent = side;
+                            sideSpan.className = "badge " + (side === "BUY" ? "info" : (side === "SELL" ? "warning" : "neutral"));
+                            sideTd.appendChild(sideSpan);
+                            tr.appendChild(sideTd);
+
+                            // Quantity
+                            const qty = leg.remaining_quantity !== null && leg.remaining_quantity !== undefined ?
+                                leg.remaining_quantity : (leg.quantity !== null && leg.quantity !== undefined ?
+                                leg.quantity : (pos.quantity !== null && pos.quantity !== undefined ? pos.quantity : (pos.qty || "-")));
+                            tr.appendChild(createCell(qty, "mono"));
+
+                            // Entry Price
+                            const ep = leg.entry_price !== null && leg.entry_price !== undefined ?
+                                "₹" + Number(leg.entry_price).toFixed(2) : (pos.entry_price !== null && pos.entry_price !== undefined ?
+                                "₹" + Number(pos.entry_price).toFixed(2) : "NOT AVAILABLE");
+                            tr.appendChild(createCell(ep, "mono"));
+
+                            // Current Price
+                            const cp = leg.current_price !== null && leg.current_price !== undefined ?
+                                "₹" + Number(leg.current_price).toFixed(2) : (pos.current_price !== null && pos.current_price !== undefined ?
+                                "₹" + Number(pos.current_price).toFixed(2) : "NOT AVAILABLE");
+                            tr.appendChild(createCell(cp, "mono"));
+
+                            // Unrealized P&L
+                            const pnlVal = leg.unrealized_pnl !== null && leg.unrealized_pnl !== undefined ?
+                                leg.unrealized_pnl : (pos.combined_unrealized_pnl !== null && pos.combined_unrealized_pnl !== undefined ?
+                                pos.combined_unrealized_pnl : pos.unrealized_pnl);
+                            const pnlText = pnlVal !== null && pnlVal !== undefined ? formatCurrency(pnlVal) : "NOT AVAILABLE";
+                            const pnlClass = pnlVal !== null && pnlVal !== undefined ?
+                                (Number(pnlVal) >= 0 ? "mono text-green" : "mono text-red") : "mono text-muted";
+                            tr.appendChild(createCell(pnlText, pnlClass));
+
+                            tbody.appendChild(tr);
+                        });
+                    } else {
+                        // Legacy single-leg or flat position record
+                        totalLegs++;
+                        const tr = document.createElement("tr");
+                        tr.appendChild(createCell(pos.strategy_id || pos.strategy || "-", "mono"));
+                        tr.appendChild(createCell(pos.symbol || pos.instrument || "-", "mono"));
+
+                        const sideTd = document.createElement("td");
+                        const sideSpan = document.createElement("span");
+                        const side = String(pos.side || "BUY").toUpperCase();
+                        sideSpan.textContent = side;
+                        sideSpan.className = "badge " + (side === "BUY" ? "info" : (side === "SELL" ? "warning" : "neutral"));
+                        sideTd.appendChild(sideSpan);
+                        tr.appendChild(sideTd);
+
+                        const qty = pos.quantity !== null && pos.quantity !== undefined ? pos.quantity : (pos.qty || 0);
+                        tr.appendChild(createCell(qty, "mono"));
+
+                        const ep = pos.entry_price !== null && pos.entry_price !== undefined ? "₹" + Number(pos.entry_price).toFixed(2) : "NOT AVAILABLE";
+                        tr.appendChild(createCell(ep, "mono"));
+
+                        const cp = pos.current_price !== null && pos.current_price !== undefined ? "₹" + Number(pos.current_price).toFixed(2) : "NOT AVAILABLE";
+                        tr.appendChild(createCell(cp, "mono"));
+
+                        const pnlVal = pos.combined_unrealized_pnl !== null && pos.combined_unrealized_pnl !== undefined ? pos.combined_unrealized_pnl : pos.unrealized_pnl;
+                        const pnlText = pnlVal !== null && pnlVal !== undefined ? formatCurrency(pnlVal) : "NOT AVAILABLE";
+                        const pnlClass = pnlVal !== null && pnlVal !== undefined ?
+                            (Number(pnlVal) >= 0 ? "mono text-green" : "mono text-red") : "mono text-muted";
+                        tr.appendChild(createCell(pnlText, pnlClass));
+
+                        tbody.appendChild(tr);
+                    }
+                });
+
+                if (countBadge) {
+                    if (totalLegs > 0 && totalLegs !== positions.length) {
+                        countBadge.textContent = positions.length + " Open (" + totalLegs + " Legs)";
+                    } else {
+                        countBadge.textContent = positions.length + " Open";
+                    }
+                }
+            }
+
+            // Main Telemetry State Refresh
+            async function fetchDashboardState() {
+                if (isPolling) return;
+                isPolling = true;
+
+                const offlineBanner = document.getElementById("offlineBanner");
+                const controller = new AbortController();
+                const timeoutId = setTimeout(function() { controller.abort(); }, REQUEST_TIMEOUT_MS);
+
+                try {
+                    const res = await fetch("/api/state", { signal: controller.signal });
+                    clearTimeout(timeoutId);
+
+                    if (!res.ok) {
+                        throw new Error("HTTP " + res.status);
+                    }
+
+                    const data = await res.json();
+
+                    // Successful retrieval: Hide offline banner, update API badge
+                    if (offlineBanner) offlineBanner.style.display = "none";
+                    updateBadge("apiStatusBadge", "apiStatusText", "ONLINE", "success");
+
+                    // Set last dashboard refresh time (wall clock)
+                    const now = new Date();
+                    const timeStr = now.toTimeString().split(" ")[0];
+                    setText("lastSyncTime", timeStr);
+
+                    // 1. Bot Process Status
+                    // 1. Bot Process Status & Lifecycle
+                    const botStatus = data.bot_status || "UNKNOWN";
+                    setText("botStatusValue", botStatus);
+                    updateBadge("botStatusBadge", "botStatusText", botStatus, getStatusType(botStatus));
+
+                    // 1b. Strategy Engine Status
+                    const stratEngine = data.strategy_engine || "NOT_AVAILABLE";
+                    setText("stratEngineValue", stratEngine);
+                    const stratBadgeType = stratEngine.startsWith("ALL_DISABLED") ? "neutral" : (stratEngine.startsWith("ACTIVE") ? "success" : "warning");
+                    updateBadge("stratEngineBadge", "stratEngineText", stratEngine.split(" ")[0], stratBadgeType);
+
+                    // 1c. Paper Execution Mode
+                    const paperExec = data.paper_execution || "STANDBY";
+                    setText("paperExecValue", paperExec);
+                    updateBadge("paperExecBadge", "paperExecText", paperExec, getStatusType(paperExec));
+
+                    // 2. Feed Connection State
+                    const feedConn = data.feed_connection || "NOT_CONNECTED";
+                    setText("feedConnValue", feedConn);
+                    updateBadge("feedConnBadge", "feedConnText", feedConn, getStatusType(feedConn));
+
+                    // 3. Market Data Health
+                    const marketHealth = data.market_data_status || "NOT_AVAILABLE";
+                    setText("marketHealthValue", marketHealth);
+                    updateBadge("marketHealthBadge", "marketHealthText", marketHealth, getStatusType(marketHealth));
+
+                    // 4. Last Market Tick
+                    const tick = data.last_tick || {};
+                    setText("tickSpotLtp", tick.spot !== null && tick.spot !== undefined ? "₹" + Number(tick.spot).toFixed(2) : "NOT AVAILABLE");
+                    setText("tickFutLtp", tick.futures !== null && tick.futures !== undefined ? "₹" + Number(tick.futures).toFixed(2) : "NOT AVAILABLE");
+                    setText("tickTimestamp", tick.timestamp || "NOT AVAILABLE");
+                    setText("tickSymbolBadge", tick.symbol || "NIFTY");
+
+                    // 5. Portfolio Summary
+                    const p = data.portfolio || {};
+                    const posCount = p.open_positions_count !== null && p.open_positions_count !== undefined ? p.open_positions_count : (data.open_positions ? data.open_positions.length : "NOT AVAILABLE");
+                    setText("openPositionsCount", posCount);
+
+                    const legsCount = p.open_legs_count !== null && p.open_legs_count !== undefined ? p.open_legs_count : "NOT AVAILABLE";
+                    setText("openLegsCount", legsCount);
+                    
+                    const mtm = p.total_unrealized_mtm;
+                    const mtmEl = document.getElementById("unrealizedMtm");
+                    if (mtmEl) {
+                        if (mtm !== null && mtm !== undefined && !isNaN(mtm)) {
+                            mtmEl.textContent = formatCurrency(mtm);
+                            mtmEl.className = "card-value " + (Number(mtm) >= 0 ? "text-green" : "text-red");
+                        } else {
+                            mtmEl.textContent = "NOT AVAILABLE";
+                            mtmEl.className = "card-value mono text-muted";
+                        }
+                    }
+
+                    const gross = p.total_realized_gross_pnl;
+                    const grossEl = document.getElementById("realizedGrossPnl");
+                    if (grossEl) {
+                        if (gross !== null && gross !== undefined && !isNaN(gross)) {
+                            grossEl.textContent = formatCurrency(gross);
+                            grossEl.className = "card-value " + (Number(gross) >= 0 ? "text-green" : "text-red");
+                        } else {
+                            grossEl.textContent = "NOT AVAILABLE";
+                            grossEl.className = "card-value mono text-muted";
+                        }
+                    }
+
+                    const charges = p.total_charges;
+                    const chargesEl = document.getElementById("totalCharges");
+                    if (chargesEl) {
+                        if (charges !== null && charges !== undefined && !isNaN(charges)) {
+                            chargesEl.textContent = formatCurrency(charges);
+                            chargesEl.className = "card-value text-red";
+                        } else {
+                            chargesEl.textContent = "NOT AVAILABLE";
+                            chargesEl.className = "card-value mono text-muted";
+                        }
+                    }
+
+                    const netPnl = p.net_combined_pnl !== undefined && p.net_combined_pnl !== null ? p.net_combined_pnl : p.total_net_realized_pnl;
+                    const netEl = document.getElementById("netCombinedPnl");
+                    if (netEl) {
+                        if (netPnl !== null && netPnl !== undefined && !isNaN(netPnl)) {
+                            netEl.textContent = formatCurrency(netPnl);
+                            netEl.className = "card-value " + (Number(netPnl) >= 0 ? "text-green" : "text-red");
+                        } else {
+                            netEl.textContent = "NOT AVAILABLE";
+                            netEl.className = "card-value mono text-muted";
+                        }
+                    }
+
+                    // 6. Tables
+                    renderPositions(data.open_positions);
+                    renderStrategies(data.strategies);
+
+                    // 7. Error Audit
+                    const errs = data.errors || {};
+                    setText("diagFeedError", errs.last_feed_error || "NONE");
+                    setText("diagSysError", errs.last_system_error || "NONE");
+
+                } catch (err) {
+                    clearTimeout(timeoutId);
+                    // Failure handling: display DASHBOARD DATA UNAVAILABLE banner
+                    if (offlineBanner) offlineBanner.style.display = "flex";
+                    updateBadge("apiStatusBadge", "apiStatusText", "OFFLINE / ERROR", "danger");
+                } finally {
+                    isPolling = false;
+                }
+            }
+
+            // Start polling lifecycle
+            document.addEventListener("DOMContentLoaded", function() {
+                fetchDashboardState();
+                pollingTimer = setInterval(fetchDashboardState, POLL_INTERVAL_MS);
+            });
+        })();
+    </script>
+</body>
+</html>

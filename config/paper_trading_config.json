@@ -1,0 +1,17 @@
+{
+  "simulation_mode": "PAPER_TRADING_ONLY",
+  "broker_live_execution": false,
+  "simulated_slippage_points": 0.4,
+  "symmetric_slippage": true,
+  "initial_virtual_capital": 1000000.0,
+  "statutory_charges": {
+    "brokerage_per_order": 20.0,
+    "stt_options_sell_pct": 0.1,
+    "stt_futures_sell_pct": 0.02,
+    "exchange_turnover_options_pct": 0.05,
+    "exchange_turnover_futures_pct": 0.00188,
+    "gst_pct": 18.0,
+    "stamp_duty_options_buy_pct": 0.003,
+    "stamp_duty_futures_buy_pct": 0.002
+  }
+}

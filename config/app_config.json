@@ -1,0 +1,16 @@
+{
+  "app_name": "NIFTY Multi-Strategy Bot",
+  "version": "2.0.0-phase1",
+  "environment": "development",
+  "mode": "PAPER_TRADING_ONLY",
+  "terminal_ui": {
+    "enabled": true,
+    "refresh_interval_seconds": 1.0
+  },
+  "logging": {
+    "level": "INFO",
+    "log_to_file": true,
+    "log_directory": "logs/application"
+  },
+  "system_status": "PHASE_1_FOUNDATION_INITIALIZED"
+}

@@ -1,0 +1,18 @@
+{
+  "underlying_symbol": "NIFTY",
+  "exchange": "NSE",
+  "segment": "F&O",
+  "strike_step": 50,
+  "default_lot_size": 65,
+  "trading_session": {
+    "pre_market_start": "09:00:00",
+    "market_open": "09:15:00",
+    "market_close": "15:30:00",
+    "intraday_square_off": "15:15:00"
+  },
+  "supported_expiries": [
+    "current_expiry",
+    "next_expiry",
+    "monthly_expiry"
+  ]
+}

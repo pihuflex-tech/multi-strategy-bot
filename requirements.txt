@@ -1,2 +1,2 @@
-pyzmq
-flask
+pyzmq>=22.0.0
+flask>=2.0.0

@@ -1,0 +1,12 @@
+{
+  "feed_transport": "ZEROMQ_SUB",
+  "feed_url": "tcp://127.0.0.1:5556",
+  "subscription_topic": "NIFTY_MARKET_TICK",
+  "hwm": 50,
+  "poll_timeout_ms": 500,
+  "stale_data_threshold_seconds": 5.0,
+  "reconnect_interval_seconds": 2.0,
+  "max_reconnect_attempts": 10,
+  "feed_enabled": false,
+  "note": "Feed connection disabled until Phase 2 feed validation is completed."
+}

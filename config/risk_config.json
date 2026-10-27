@@ -1,0 +1,9 @@
+{
+  "portfolio_max_daily_loss": 50000.0,
+  "portfolio_max_drawdown_pct": 5.0,
+  "max_open_positions_total": 200,
+  "max_open_positions_per_strategy": 4,
+  "emergency_square_off_enabled": true,
+  "capital_allocation_model": "FIXED_LOT",
+  "risk_checks_enabled": true
+}
